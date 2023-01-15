@@ -20,7 +20,7 @@ class UCB_dataset(Dataset):
         self.actions = torch.zeros([N, T+self.n_arms], dtype = torch.long)
         self.rewards = torch.zeros([N, T+self.n_arms], dtype = torch.float)
         for i in range(N):
-            ucb_agent = UCB1(mab1)
+            ucb_agent = UCB1(mab)
             ucb_agent.initialize()
             ucb_agent.run_N_actions(T) 
             self.actions[i] = torch.Tensor(ucb_agent.record["actions"])
