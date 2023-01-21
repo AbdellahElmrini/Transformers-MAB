@@ -91,6 +91,26 @@ class UCB1(Agent):
             self.take_action()
 
 
+class TransformerAgent():
+    """
+    Transformer learned strategy
+    """
+    def __init__(self, mab, model):
+        super().__init__()
+        self.mab = mab
+        self.model = model
+        self.visits = np.zeros(mab.n)
+        self.rewards = np.zeros(mab.n)
+        self.initialized = False
+    
+    def take_action(self):
+        actions, rewards = self.model.generate(self.record["actions"], self.record["rewards"], 1)
+        return rewards[-1]
+    def run_N_actions(self, N):
+        self.model.generate(self.record["actions"], self.record["rewards"], N)
+        return rewards[-N:]
+
+
 if __name__ == "__main__":
     mab1= MAB_normal(n=5)
     ucb_agent = UCB1(mab1)

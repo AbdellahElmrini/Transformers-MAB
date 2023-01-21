@@ -17,14 +17,18 @@ class UCB_dataset(Dataset):
         self.N = N
         self.T = T
         self.n_arms = self.mab.n
-        self.actions = torch.zeros([N, T+self.n_arms], dtype = torch.long)
-        self.rewards = torch.zeros([N, T+self.n_arms], dtype = torch.float)
+        self.actions = torch.zeros([N, T+self.n_arms+1], dtype = torch.long)
+        self.rewards = torch.zeros([N, T+self.n_arms+1], dtype = torch.float)
         for i in range(N):
             ucb_agent = UCB1(mab)
             ucb_agent.initialize()
             ucb_agent.run_N_actions(T) 
-            self.actions[i] = torch.Tensor(ucb_agent.record["actions"])
-            self.rewards[i] = torch.Tensor(ucb_agent.record["rewards"])
+
+            self.actions[i] = torch.cat((torch.Tensor([0]), torch.Tensor(ucb_agent.record["actions"])+1)) #0 is our $<bos>$
+            self.rewards[i] = torch.cat((torch.Tensor([0]), torch.Tensor(ucb_agent.record["rewards"])))
+            
+            #self.actions[i] = torch.Tensor(np.concatenate(([0], np.array(ucb_agent.record["actions"])+1))) 
+            #self.rewards[i] = torch.Tensor(np.concatenate(([0], ucb_agent.record["rewards"])))
         
     def __len__(self):
         return self.N

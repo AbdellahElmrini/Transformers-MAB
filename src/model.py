@@ -10,15 +10,15 @@ from layers import Block
 from config import LightConfig, TransformerConfig
 from multiarmedbandits import MAB_normal
 
-
+#TODO Debug
 class UCBTransformerModel(nn.Module):
     """
-    Decoder only transformer (GPT) to learn a multi armed bandit strategy.
+    Decoder only transformer (GPT) to learn a multi-armed bandits strategy.
     """
     def __init__(self, config, mab):
         super().__init__()
-        self.mab = mab
-        n_embd = config.n_embd-1 
+        self.mab = mab # Multi-armed bandits instance, used in inference time for generation
+        n_embd = config.n_embd-1  #TODO 
         self.max_len = config.max_len
         self.tok_embed = nn.Embedding(
             config.vocab_size, n_embd
@@ -32,7 +32,7 @@ class UCBTransformerModel(nn.Module):
         )
         n_embd += 1
         self.ln = nn.LayerNorm(n_embd)
-        self.fc = nn.Linear(n_embd, config.vocab_size)
+        self.fc = nn.Linear(n_embd, config.vocab_size) #TODO Test if a two layer MLP is better
         
         
     def forward(self, actions, rewards, target=None):
@@ -59,10 +59,10 @@ class UCBTransformerModel(nn.Module):
     @torch.no_grad()
     def generate(self, actions, rewards, max_new_tokens, temperature=1.0, do_sample=False, top_k=None):
         """
-        Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
+        Take a conditioning sequence of actions, rewards (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
-        Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
+
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at max_len
             actions_cond = actions if actions.size(1) <= self.max_len else actions[:, -self.max_len:]
@@ -84,9 +84,12 @@ class UCBTransformerModel(nn.Module):
             else:
                 _, action_next = torch.topk(probs, k=1, dim=-1)
             # append sampled index to the running sequence and continue
-            reward_next = self.mab.pull(action_next)
+            reward_next = self.mab.pull(action_next-1)
+            
             actions = torch.cat((actions, action_next), dim=1)
             rewards = torch.cat((rewards, reward_next), dim=1)
+            
+
 
         return actions, rewards
 
