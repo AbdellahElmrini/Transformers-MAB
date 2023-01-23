@@ -23,7 +23,6 @@ class UCB_dataset(Dataset):
             ucb_agent = UCB1(mab)
             ucb_agent.initialize()
             ucb_agent.run_N_actions(T) 
-
             self.actions[i] = torch.cat((torch.Tensor([0]), torch.Tensor(ucb_agent.record["actions"])+1)) #0 is our $<bos>$
             self.rewards[i] = torch.cat((torch.Tensor([0]), torch.Tensor(ucb_agent.record["rewards"])))
             
@@ -50,12 +49,12 @@ class Strategy_dataset(Dataset):
         self.N = N
         self.T = T
         self.n_arms = self.mab.n
-        self.actions = torch.zeros([N, T+self.n_arms+1], dtype = torch.long)
-        self.rewards = torch.zeros([N, T+self.n_arms+1], dtype = torch.float)
+        self.actions = torch.zeros([N, T+1], dtype = torch.long)
+        self.rewards = torch.zeros([N, T+1], dtype = torch.float)
         for i in range(N):
             agent.reinitialize()
             agent.initialize()
-            agent.run_N_actions(T) 
+            agent.run_N_actions(T - len(agent.record["actions"])) 
             self.actions[i] = torch.cat((torch.Tensor([0]), torch.Tensor(agent.record["actions"])+1)) #0 is our $<bos>$
             self.rewards[i] = torch.cat((torch.Tensor([0]), torch.Tensor(agent.record["rewards"])))
         
