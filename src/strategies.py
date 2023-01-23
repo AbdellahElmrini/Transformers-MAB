@@ -2,18 +2,55 @@ import numpy as np
 from abc import ABC, abstractmethod
 from multiarmedbandits import MAB_normal
 
-class Agent(ABC):
+class ABCAgent(ABC):
     def __init__(self):
         self.mab = None
-        self.rewards = np.array([])
-        self.visits = np.array([])
-        self.actions = np.array([])
+        self.rewards = np.array([]) # List of the rewards obtained by the agent
+        self.actions = np.array([]) # List of the action taken by the agent
+        self.visits = np.array([]) # Number of visits to each action
         self.record = {'actions':[], 'rewards':[] } # Dict listing actions and rewards
        
     @abstractmethod
     def take_action(self):
         ...
+
+    def reinitialize(self):
+        ...
     
+class Agent(ABCAgent):
+    def __init__(self):
+        super().__init__()
+
+    def reinitialize(self):
+        self.rewards = np.array([])
+        self.actions = np.array([])
+        self.visits = np.array([])
+        self.record = {'actions':[], 'rewards':[] }
+    
+    def initialize(self):
+        # Necessary only for some strategies, such as UCB
+        pass
+
+class Uniform_agent(Agent):
+    "Completely random actions"
+    def __init__(self, mab):
+        super().__init__()
+        self.mab = mab
+        self.visits = np.zeros(mab.n)
+        self.rewards = np.zeros(mab.n)
+    def take_action(self):
+        action = np.random.randint(self.mab.n)
+        reward = mab.pull(action)
+        self.record["actions"].append(action)
+        self.record["rewards"].append(reward)
+        return reward
+
+    def run_N_actions(self, N):
+        for _ in range(N):
+            self.take_action()
+
+
+
 class Epsilon_greedy(Agent):
     """
     Epsilon greedy strategy
@@ -45,6 +82,7 @@ class Epsilon_greedy(Agent):
         self.record["rewards"].append(reward)
         return reward
     
+    
 class UCB1(Agent):
     """
     Upper Confidence Interval strategy"""
@@ -55,6 +93,13 @@ class UCB1(Agent):
         self.rewards = np.zeros(mab.n)
         self.initialized = False
     
+    def reinitialize(self):
+        self.visits = np.zeros(self.mab.n)
+        self.rewards = np.zeros(self.mab.n)
+        self.initialized = False
+        self.record["actions"] = []
+        self.record["rewards"] = []
+
     def get_current_best_bandit(self):
         N = sum(self.visits)
         estimates = self.rewards + np.sqrt(2*np.log(N)/self.visits)
