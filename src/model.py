@@ -18,7 +18,7 @@ class UCBTransformerModel(nn.Module):
     def __init__(self, config, mab):
         super().__init__()
         self.mab = mab # Multi-armed bandits instance, used in inference time for generation
-        n_embd = config.n_embd-1  #TODO 
+        n_embd = config.n_embd - 1 # The rewards vector is added as an embedding to be fed to the transformer block
         self.max_len = config.max_len
         self.tok_embed = nn.Embedding(
             config.vocab_size, n_embd
@@ -56,6 +56,7 @@ class UCBTransformerModel(nn.Module):
         # x.shape == (batch_size, seq_len, vocab_size)
         return loss, logits
     
+    #TODO never return 0 as next action 
     @torch.no_grad()
     def generate(self, actions, rewards, max_new_tokens, temperature=1.0, do_sample=False, top_k=None):
         """
@@ -72,6 +73,12 @@ class UCBTransformerModel(nn.Module):
             _, logits = self(actions_cond, rewards_cond)
             # pluck the logits at the final step and scale by desired temperature
             logits = logits[:, -1, :] / temperature
+
+            # Excluding the token 0 <BOS>
+            logits.index_fill_(1, torch.tensor([0]).to(logits.device),-float('Inf') )
+            #logits[:, 0, : ] = -float('Inf')
+
+
             # optionally crop the logits to only the top k options
             if top_k is not None:
                 v, _ = torch.topk(logits, top_k)
@@ -84,12 +91,12 @@ class UCBTransformerModel(nn.Module):
             else:
                 _, action_next = torch.topk(probs, k=1, dim=-1)
             # append sampled index to the running sequence and continue
-            reward_next = self.mab.pull(action_next-1)
+            
+            reward_next = torch.Tensor(self.mab.pull_V(action_next.cpu()-1)).to(rewards.device)
+         
             
             actions = torch.cat((actions, action_next), dim=1)
             rewards = torch.cat((rewards, reward_next), dim=1)
-            
-
 
         return actions, rewards
 
