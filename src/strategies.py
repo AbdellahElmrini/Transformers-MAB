@@ -1,11 +1,12 @@
 import numpy as np
+import torch
 from abc import ABC, abstractmethod
 from multiarmedbandits import MAB_normal
 
 class ABCAgent(ABC):
     def __init__(self):
         self.mab = None
-        self.rewards = np.array([]) # List of the rewards obtained by the agent
+        self.criterion = np.array([]) # Crtierion used to choose the action
         self.actions = np.array([]) # List of the action taken by the agent
         self.visits = np.array([]) # Number of visits to each action
         self.record = {'actions':[], 'rewards':[] } # Dict listing actions and rewards
@@ -22,7 +23,7 @@ class Agent(ABCAgent):
         super().__init__()
 
     def reinitialize(self):
-        self.rewards = np.array([])
+        self.criterion = np.array([])
         self.actions = np.array([])
         self.visits = np.array([])
         self.record = {'actions':[], 'rewards':[] }
@@ -31,23 +32,26 @@ class Agent(ABCAgent):
         # Necessary only for some strategies, such as UCB
         pass
 
+    def run_N_actions(self, N):
+        # TODO : Change name to take_N_actions
+        for _ in range(N):
+            self.take_action()
+
 class Uniform_agent(Agent):
     "Completely random actions"
     def __init__(self, mab):
         super().__init__()
         self.mab = mab
         self.visits = np.zeros(mab.n)
-        self.rewards = np.zeros(mab.n)
+        self.criterion = np.zeros(mab.n)
     def take_action(self):
         action = np.random.randint(self.mab.n)
-        reward = mab.pull(action)
+        reward = self.mab.pull(action)
         self.record["actions"].append(action)
         self.record["rewards"].append(reward)
         return reward
 
-    def run_N_actions(self, N):
-        for _ in range(N):
-            self.take_action()
+    
 
 
 
@@ -60,13 +64,13 @@ class Epsilon_greedy(Agent):
         self.mab = mab
         self.eps = eps
         self.visits = np.zeros(mab.n)
-        self.rewards = np.zeros(mab.n)
+        self.criterion = np.zeros(mab.n)
             
     def get_random_bandit(self):
         return np.random.randint(self.mab.n)
     
     def get_current_best_bandit(self):
-        return np.random.choice(np.flatnonzero(self.rewards == max(self.rewards))) #To randomize tie breaks
+        return np.random.choice(np.flatnonzero(self.criterion == max(self.criterion))) #To randomize tie breaks
         
     def take_action(self):
         p = np.random.rand()
@@ -77,7 +81,7 @@ class Epsilon_greedy(Agent):
         reward = self.mab.pull(a)
         Na = self.visits[a]+1
         self.visits[a] += 1
-        self.rewards[a] =  (Na-1)/Na*self.rewards[a] + 1/Na * reward 
+        self.criterion[a] =  (Na-1)/Na*self.criterion[a] + 1/Na * reward 
         self.record["actions"].append(a)
         self.record["rewards"].append(reward)
         return reward
@@ -90,19 +94,19 @@ class UCB1(Agent):
         super().__init__()
         self.mab = mab
         self.visits = np.zeros(mab.n)
-        self.rewards = np.zeros(mab.n)
+        self.criterion = np.zeros(mab.n)
         self.initialized = False
     
     def reinitialize(self):
         self.visits = np.zeros(self.mab.n)
-        self.rewards = np.zeros(self.mab.n)
+        self.criterion = np.zeros(self.mab.n)
         self.initialized = False
         self.record["actions"] = []
         self.record["rewards"] = []
 
     def get_current_best_bandit(self):
         N = sum(self.visits)
-        estimates = self.rewards + np.sqrt(2*np.log(N)/self.visits)
+        estimates = self.criterion + np.sqrt(2*np.log(N)/self.visits)
         return np.random.choice(np.flatnonzero(estimates == max(estimates))) #To randomize tie breaks
     
     def initialize(self):
@@ -114,7 +118,7 @@ class UCB1(Agent):
             for a in L:
                 reward = self.mab.pull(a)
                 self.visits[a] = 1
-                self.rewards[a] = reward
+                self.criterion[a] = reward
                 self.record["actions"].append(a)
                 self.record["rewards"].append(reward)
             self.initialized = True
@@ -126,17 +130,13 @@ class UCB1(Agent):
         reward = self.mab.pull(a)
         Na = self.visits[a]+1
         self.visits[a] += 1
-        self.rewards[a] = (Na-1)/Na*self.rewards[a] + 1/Na * reward 
+        self.criterion[a] = (Na-1)/Na*self.criterion[a] + 1/Na * reward 
         self.record["actions"].append(a)
         self.record["rewards"].append(reward)
         return reward
-    
-    def run_N_actions(self, N):
-        for _ in range(N):
-            self.take_action()
 
 
-class TransformerAgent():
+class TransformerAgent(Agent):
     """
     Transformer learned strategy
     """
@@ -145,15 +145,38 @@ class TransformerAgent():
         self.mab = mab
         self.model = model
         self.visits = np.zeros(mab.n)
-        self.rewards = np.zeros(mab.n)
+        self.criterion = np.zeros(mab.n)
         self.initialized = False
     
     def take_action(self):
-        actions, rewards = self.model.generate(self.record["actions"], self.record["rewards"], 1)
-        return rewards[-1]
+        if not self.initialized:
+            action, reward = self.model.generate(torch.zeros((1,1), dtype= torch.int), torch.zeros((1,1)), 1) 
+            self.initialized = True
+        else:
+            action, reward = self.model.generate(self.record["actions"], self.record["rewards"], 1)
+        return reward.item()
+    
+    def reinitialize(self):
+        self.initialized = False
+        self.record["actions"] = []
+        self.record["rewards"] = []
+
     def run_N_actions(self, N):
-        self.model.generate(self.record["actions"], self.record["rewards"], N)
-        return rewards[-N:]
+        if not self.initialized:
+            device = next(self.model.parameters()).device
+            starting_action = torch.zeros((1,1), dtype= torch.int).to(device)
+            starting_reward = torch.zeros((1,1)).to(device)
+            next_actions, next_rewards = self.model.generate(starting_action, starting_reward, N)
+            self.record["actions"].extend( next_actions[0, -N:].tolist())   
+            self.record["rewards"].extend( next_rewards[0, -N:].tolist())
+            self.initialized = True
+        else:
+            actions = torch.Tensor(self.record["actions"]).unsqueeze(0)
+            rewards = torch.Tensor(self.record["rewards"]).unsqueeze(0)
+            next_actions, next_rewards = self.model.generate(actions, rewards, N)
+            self.record["actions"].extend( next_actions[-N:].tolist())   
+            self.record["rewards"].extend( next_rewards[-N:].tolist())
+        return next_rewards[-N:]
 
 
 if __name__ == "__main__":
