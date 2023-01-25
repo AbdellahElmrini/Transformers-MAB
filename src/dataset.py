@@ -3,7 +3,7 @@ from torch.utils.data import Dataset, DataLoader
 import torch.nn.functional as F
 import numpy as np
 from multiarmedbandits import MAB_normal
-from strategies import Epsilon_greedy, UCB1
+from strategies import EpsilonGreedy, UCB1
 
 
 class UCB_dataset(Dataset):
@@ -64,6 +64,34 @@ class Strategy_dataset(Dataset):
     def __getitem__(self, idx):
         return self.actions[idx], self.rewards[idx]
 
+class Mixed_strategy_dataset(Dataset):
+    def __init__(self, agents, N, T):
+        """
+        agent (Agent) :  List of the strategy to be executed
+        mab : A MAB class instance used to generate the rewards.
+        N : Dataset size.
+        T : Horizon.
+        """
+        self.k = len(agents)
+        self.agents = agents
+        self.N = N
+        self.T = T
+        self.n_arms = self.agents[0].mab.n #TODO : check that all mab have the same n
+        self.actions = torch.zeros([N, T+1], dtype = torch.long) 
+        self.rewards = torch.zeros([N, T+1], dtype = torch.float)
+        for i in range(N):
+            agent = np.random.choice(self.agents)
+            agent.reinitialize()
+            agent.initialize()
+            agent.run_N_actions(T - len(agent.record["actions"])) 
+            self.actions[i] = torch.cat((torch.Tensor([0]), torch.Tensor(agent.record["actions"])+1)) #0 is our $<bos>$
+            self.rewards[i] = torch.cat((torch.Tensor([0]), torch.Tensor(agent.record["rewards"])))
+        
+    def __len__(self):
+        return self.N
+        
+    def __getitem__(self, idx):
+        return self.actions[idx], self.rewards[idx]
 
 if __name__ == "__main__":
     mab1= MAB_normal(n=5)

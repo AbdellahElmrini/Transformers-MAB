@@ -20,7 +20,7 @@ class MAB(ABC):
     def pull_V(self, A):
         ...
 
-class MAB_normal(MAB):
+class MAB_normal_V0(MAB):
     def __init__(self, n):
         """
         A special multi-armed bandits, with n arms giving awards of the form N(a,1)
@@ -34,7 +34,15 @@ class MAB_normal(MAB):
         """
         return np.random.randn()+ a
 
-class MAB_normal2(MAB):
+    def pull_V(self, A):
+        """
+        A (torch.Tensor) : Vectorized version of pull
+        """
+        n = self.n
+        m = A.size(0)
+        return np.random.randn(m,1) + (A.numpy()+1)/(n+1)
+
+class MAB_normal_V1(MAB):
     def __init__(self, n):
         """
         A special multi-armed bandits, with n arms giving awards of the form N((a+1)/(n+2),1/n)
@@ -48,8 +56,16 @@ class MAB_normal2(MAB):
         """
         n = self.n
         return 1/np.sqrt(n)*np.random.randn() + (a+1)/(n+1)
+    
+    def pull_V(self, A):
+        """
+        A (torch.Tensor) : Vectorized version of pull
+        """
+        n = self.n
+        m = A.size(0)
+        return 1/np.sqrt(n)*np.random.randn(m,1) + (A.numpy()+1)/(n+1)
 
-class MAB_normal_random(MAB):
+class MAB_normal(MAB):
     def __init__(self, n):
         """
         A special multi-armed bandits, with n arms giving awards of the form N((a+1)/(n+2),1/n)
@@ -60,6 +76,7 @@ class MAB_normal_random(MAB):
         self.perm = np.arange(n)
         np.random.shuffle(self.perm)
         self.best_action = list(self.perm).index(n-1)
+        self.best_reward_avg = (n+1)/(n+2)
     def pull(self, a):
         """
         a (int): Chosen arm in 0,..,n-1
@@ -76,7 +93,7 @@ class MAB_normal_random(MAB):
         m = A.size(0)
         return 1/np.sqrt(n)*np.random.randn(m,1) + (self.perm[A]+1)/(n+1)
         
-class MAB_Bernoulli(MAB):
+class MAB_Bernoulli_V0(MAB):
     def __init__(self, n):
         """
         A special multi-armed bandits, with n arms giving awards of the form B((a+1)/(n+2))
@@ -102,8 +119,7 @@ class MAB_Bernoulli(MAB):
         m = A.size(0)
         return np.random.rand(m, 1) < (A.numpy()+1)/(n+2)
 
-
-class MAB_Bernoulli_random(MAB):
+class MAB_Bernoulli(MAB):
     def __init__(self, n):
         """
         A special multi-armed bandits, with n arms giving awards of the form B((a+1)/(n+2))

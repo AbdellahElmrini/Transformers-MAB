@@ -7,7 +7,6 @@ class ABCAgent(ABC):
     def __init__(self):
         self.mab = None
         self.criterion = np.array([]) # Crtierion used to choose the action
-        self.actions = np.array([]) # List of the action taken by the agent
         self.visits = np.array([]) # Number of visits to each action
         self.record = {'actions':[], 'rewards':[] } # Dict listing actions and rewards
        
@@ -23,9 +22,8 @@ class Agent(ABCAgent):
         super().__init__()
 
     def reinitialize(self):
-        self.criterion = np.array([])
-        self.actions = np.array([])
-        self.visits = np.array([])
+        self.criterion = np.zeros(self.mab.n)
+        self.visits = np.zeros(self.mab.n)
         self.record = {'actions':[], 'rewards':[] }
     
     def initialize(self):
@@ -37,7 +35,7 @@ class Agent(ABCAgent):
         for _ in range(N):
             self.take_action()
 
-class Uniform_agent(Agent):
+class UniformAgent(Agent):
     "Completely random actions"
     def __init__(self, mab):
         super().__init__()
@@ -53,9 +51,7 @@ class Uniform_agent(Agent):
 
     
 
-
-
-class Epsilon_greedy(Agent):
+class EpsilonGreedy(Agent):
     """
     Epsilon greedy strategy
     """
@@ -70,7 +66,7 @@ class Epsilon_greedy(Agent):
         return np.random.randint(self.mab.n)
     
     def get_current_best_bandit(self):
-        return np.random.choice(np.flatnonzero(self.criterion == max(self.criterion))) #To randomize tie breaks
+        return np.random.choice(np.flatnonzero(self.criterion == np.max(self.criterion))) #To randomize tie breaks
         
     def take_action(self):
         p = np.random.rand()
@@ -107,12 +103,20 @@ class UCB1(Agent):
     def get_current_best_bandit(self):
         N = sum(self.visits)
         estimates = self.criterion + np.sqrt(2*np.log(N)/self.visits)
-        return np.random.choice(np.flatnonzero(estimates == max(estimates))) #To randomize tie breaks
-    
+        #return np.random.choice(np.flatnonzero(estimates == max(estimates))) #To randomize tie breaks
+        return np.argmax(estimates)
+
     def initialize(self):
-        if self.initialized:
-            pass
-        else:
+        if not self.initialized:
+            for a in range(self.mab.n):
+                reward = self.mab.pull(a)
+                self.visits[a] = 1
+                self.criterion[a] = reward
+                self.record["actions"].append(a)
+                self.record["rewards"].append(reward)
+            self.initialized = True
+    def initialize0(self):
+        if not self.initialized:
             L = np.arange(self.mab.n)
             np.random.shuffle(L)
             for a in L:
@@ -149,6 +153,7 @@ class TransformerAgent(Agent):
         self.initialized = False
     
     def take_action(self):
+        #TODO : to(device) support
         if not self.initialized:
             action, reward = self.model.generate(torch.zeros((1,1), dtype= torch.int), torch.zeros((1,1)), 1) 
             self.initialized = True
@@ -171,6 +176,7 @@ class TransformerAgent(Agent):
             self.record["rewards"].extend( next_rewards[0, -N:].tolist())
             self.initialized = True
         else:
+            # This was not tested, here for consistency only.
             actions = torch.Tensor(self.record["actions"]).unsqueeze(0)
             rewards = torch.Tensor(self.record["rewards"]).unsqueeze(0)
             next_actions, next_rewards = self.model.generate(actions, rewards, N)
