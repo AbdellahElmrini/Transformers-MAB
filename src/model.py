@@ -34,7 +34,13 @@ class UCBTransformerModel(nn.Module):
         self.ln = nn.LayerNorm(n_embd)
         self.fc = nn.Linear(n_embd, config.vocab_size) #TODO Test if a two layer MLP is better
         
-        
+    
+    def reinit(self, mab):
+        """
+        Reinitalize the model with a new MAB instance, while keeping the same model parameters.
+        """
+        assert mab.n == self.mab.n, "The new MAB instance must have the same number of arms as the previous one."
+        self.mab = mab
     def forward(self, actions, rewards, target=None):
         # batch_size = x.size(0)
         x = actions

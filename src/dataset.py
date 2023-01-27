@@ -69,15 +69,13 @@ class Transformer_dataset(Dataset):
     """
     Dataset of a transformer strategy runs
     """
-    def __init__(self, model, mab, N, T):
+    def __init__(self, model, N, T):
         """
-        model (Transformer) : The transformer to be executed
-        mab : A MAB class instance used to generate the rewards.
+        model (Transformer) : The transformer to be executed.
         N : Dataset size.
         T : Horizon.
         """
-
-        self.mab = mab
+        self.mab = model.mab
         self.model = model
         self.device = model.parameters().__next__().device
         self.N = N
@@ -86,7 +84,7 @@ class Transformer_dataset(Dataset):
 
         starting_actions = torch.zeros([N, 1], dtype = torch.long).to(self.device)
         starting_rewards = torch.zeros([N, 1], dtype = torch.float).to(self.device)
-        actions, rewards = model.generate(starting_actions, starting_rewards, T)
+        actions, rewards = model.generate(starting_actions, starting_rewards, T, top_k = 2)
         self.actions = actions
         self.rewards = rewards
 
@@ -147,8 +145,10 @@ class Mixed_mab_dataset(Dataset):
         self.n_arms = self.mabs[0].n #TODO: check if all mabs have the same number of arms
         self.actions = torch.zeros([N, T+1], dtype = torch.long)
         self.rewards = torch.zeros([N, T+1], dtype = torch.float)
+        self.chosen_mabs = torch.zeros([N], dtype = torch.long)
         for i in range(N):
             mab = np.random.choice(self.mabs)
+            self.chosen_mabs[i] = self.mabs.index(mab)
             agent.reinitialize(mab)
             agent.take_N_actions(T) 
             self.actions[i] = torch.cat((torch.Tensor([0]), torch.Tensor(agent.record["actions"])+1))

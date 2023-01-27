@@ -1,7 +1,7 @@
 class TransformerConfig:
-    attn_dropout = 0.1
-    embed_dropout = 0.1
-    ff_dropout = 0.1
+    attn_dropout = 0.3
+    embed_dropout = 0.3
+    ff_dropout = 0.3
     def __init__(
         self, vocab_size, max_len, **kwargs
     ):
@@ -11,9 +11,9 @@ class TransformerConfig:
             setattr(self, key, value)
 
 class LightConfig(TransformerConfig):
-    n_heads = 2
-    n_blocks = 3
-    n_embd = 4
+    n_heads = 4
+    n_blocks = 4
+    n_embd = 16
 
 class TrainConfig():
     def __init__(self, lr, epochs, **kwargs):
