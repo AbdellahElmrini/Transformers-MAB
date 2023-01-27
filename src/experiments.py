@@ -10,12 +10,12 @@ import time
 
 from layers import Block
 from config import LightConfig, TransformerConfig, TrainConfig
-from multiarmedbandits import MAB_normal_V0, MAB_normal_V1, MAB_normal, MAB_Bernoulli_V0, MAB_Bernoulli
+from multiarmedbandits import MAB_normal_V0, MAB_normal_V1, MAB_normal, MAB_Bernoulli_V0, MAB_Bernoulli, MAB_Deterministic
 
 from model import UCBTransformerModel
-from dataset import UCB_dataset, Strategy_dataset, Mixed_strategy_dataset
-from utils import plot_regret, compute_regret, compute_best_action_selection_rate
-from strategies import EpsilonGreedy, UCB1, TransformerAgent, UniformAgent
+from dataset import UCB_dataset, Strategy_dataset, Mixed_strategy_dataset, Transformer_dataset
+from utils import plot_regret, compute_regret, compute_best_action_selection_rate, plot_regrets, plot_best_action_selection_rate
+from strategies import EpsilonGreedy, UCBAgent, TransformerAgent, UniformAgent
 
 from main import train
 from matplotlib import pyplot as plt
@@ -198,36 +198,83 @@ def experiment0():
     # plot ucb cumulative regret
     print("Comparing UCB and Epsilon Greedy cumulative regret ...")
     mab = MAB_Bernoulli(5)
-    agent_UCB = UCB1(mab)
     agent_Eps = EpsilonGreedy(mab, 0.1)
-    #stg_data_UCB = Strategy_dataset(agent_UCB, mab, 500, 200)
-    stg_data_UCB = UCB_dataset(mab, 500, 200)
-    stg_data_Eps = Strategy_dataset(agent_Eps, mab, 500, 200)
+    train_data = Strategy_dataset(agent_Eps, mab, 500, 100)
+    train_loader = DataLoader(train_data, batch_size = 32)
+
+    # Transformer agent
+    t = time.time()
+    vocab_size = 5
+    max_len = 101
+    config = LightConfig(vocab_size+1, max_len)
+    model = UCBTransformerModel(config, mab)
+
+    train_config = TrainConfig(lr=0.001, epochs = 6, device = "cpu")
+    train(model, train_loader, train_config)
+    print("Training time: ", time.time() - t)
+
+    agent_T = TransformerAgent(mab, model)
+    agent_Eps = EpsilonGreedy(mab, 0.1)
+    stg_data_T = Strategy_dataset(agent_T, mab, 500, 100)
+    print("Built stg_data_T in : ", time.time() - t) 
+    stg_data_Eps = Strategy_dataset(agent_Eps, mab, 500, 100)
+    stg_data_UCB = UCB_dataset(mab, 500, 100)
     regret_UCB = compute_regret(stg_data_UCB.rewards, mab)
+    regret_T = compute_regret(stg_data_T.rewards, mab)
     regret_Eps = compute_regret(stg_data_Eps.rewards, mab)
-    plt.plot(regret_UCB[1:], label = "UCB1")
+    plt.plot(regret_T[1:], label = "Transformer")
     plt.plot(regret_Eps[1:], label = "Epsilon Greedy")
+    plt.plot(regret_UCB[1:], label = "UCB")
     plt.legend()
-    plt.title("UCB1-EpsGreedy cumulative regret")
-    plt.savefig("Figs/ucb1_EG_cum_regret.png")
+    plt.title("Cumulative regret comparison")
+    plt.savefig("Figs/cum_regret_comp.png")
     plt.clf()
     best_action = mab.best_action
-    best_action_selection_rate_UCB = compute_best_action_selection_rate(stg_data_UCB.actions, best_action)
+    best_action_selection_rate_T = compute_best_action_selection_rate(stg_data_T.actions, best_action)
     best_action_selection_rate_Eps = compute_best_action_selection_rate(stg_data_Eps.actions, best_action)
-    plt.plot(best_action_selection_rate_UCB[1:], label = "UCB1")
+    best_action_selection_rate_UCB = compute_best_action_selection_rate(stg_data_UCB.actions, best_action)
+    plt.plot(best_action_selection_rate_T[1:], label = "Transformer")
     plt.plot(best_action_selection_rate_Eps[1:], label = "Epsilon Greedy")
+    plt.plot(best_action_selection_rate_UCB[1:], label = "UCB")
+    plt.plot()
     plt.legend()
-    plt.title("UCB1-EpsGreedy best action selection rate")
-    plt.savefig("Figs/ucb1_EG_best_action_selection_rate.png")
+    plt.title("Best action selection rate")
+    plt.savefig("Figs/best_action_selection_rate_comp.png")
 
 
 
+def experiment00():
+    print("Comparing UCB and Epsilon Greedy cumulative regret ...")
+    mab = MAB_Bernoulli(3)
+    
+    agent_Eps = EpsilonGreedy(mab, 0.1)
+    train_data = Strategy_dataset(agent_Eps, mab, 2000, 100)
+    train_loader = DataLoader(train_data, batch_size = 32)
 
-
+    # Transformer agent
+    t = time.time()
+    vocab_size = mab.n
+    max_len = 101
+    config = LightConfig(vocab_size+1, max_len)
+    device = torch.device("cpu")# torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = UCBTransformerModel(config, mab).to(device)
+    train_config = TrainConfig(lr=0.001, epochs = 5, device = device)
+    train(model, train_loader, train_config)
+    print("Training time: ", time.time() - t)
+    print("Changing mab ...")
+    mab = MAB_Bernoulli(5)
+    data_T = Transformer_dataset(model, mab, 2000, 100)
+    data_Eps = train_data
+    data_UCB = UCB_dataset(mab, 2000, 100)
+    datasets_list = [data_T, data_Eps, data_UCB]
+    names = ["Transformer", "Epsilon Greedy", "UCB"]
+    plot_regrets(datasets_list, mab, names)
+    plot_best_action_selection_rate(datasets_list, mab, names)
+    print("Built dataset in : ", time.time() - t)
 
 
 
 
 if __name__ == "__main__":
-    experiment0()
+    experiment00()
 

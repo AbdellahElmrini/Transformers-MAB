@@ -3,7 +3,6 @@ import torch
 from abc import ABC, abstractmethod
 
 #TODO Assert action is among possible actions
-#TODO Pull multiple arms at the same time (for vectorization)
 
 
 
@@ -69,14 +68,14 @@ class MAB_normal(MAB):
     def __init__(self, n):
         """
         A special multi-armed bandits, with n arms giving awards of the form N((a+1)/(n+2),1/n)
-        Order of the arms is arbitrary this time
+        Order of the arms is arbitrary.
         """
         super().__init__()
         self.n = n
         self.perm = np.arange(n)
         np.random.shuffle(self.perm)
         self.best_action = list(self.perm).index(n-1)
-        self.best_reward_avg = (n+1)/(n+2)
+        self.best_reward_avg = n/(n+1)
     def pull(self, a):
         """
         a (int): Chosen arm in 0,..,n-1
@@ -123,13 +122,14 @@ class MAB_Bernoulli(MAB):
     def __init__(self, n):
         """
         A special multi-armed bandits, with n arms giving awards of the form B((a+1)/(n+2))
+        Order of the arms is arbitrary.
         """
         super().__init__()
         self.n = n
         self.perm = np.arange(n)
         np.random.shuffle(self.perm)
         self.best_action = list(self.perm).index(n-1)
-        self.best_reward_avg = (n+1)/(n+2)
+        self.best_reward_avg = n/(n+1)
 
     def pull(self, a):
         """
@@ -137,7 +137,7 @@ class MAB_Bernoulli(MAB):
         """
         n = self.n
         assert a>= 0 and a<= n-1, "Action not possible"
-        return np.random.rand() < (self.perm[a]+1)/(n+2)
+        return np.random.rand() < (self.perm[a]+1)/(n+1)
 
     def pull_V(self, A):
         """
@@ -146,4 +146,33 @@ class MAB_Bernoulli(MAB):
         n = self.n
         #assert A>= 0 and A <= n-1
         m = A.size(0)
-        return np.random.rand(m, 1) < (self.perm[A]+1)/(n+2)
+        return np.random.rand(m, 1) < (self.perm[A]+1)/(n+1)
+
+class MAB_Deterministic(MAB):
+    def __init__(self, n):
+        """
+        A special multi-armed bandits, with n arms giving deterministic awards of the form (a+1)/(n+2)
+        """
+        super().__init__()
+        self.n = n
+        self.perm = np.arange(n)
+        np.random.shuffle(self.perm)
+        self.best_action = list(self.perm).index(n-1)
+        self.best_reward_avg = (n)/(n+1)
+
+    def pull(self, a):
+        """
+        a (int): Chosen arm in 0,..,n-1
+        """
+        n = self.n
+        assert a>= 0 and a<= n-1, "Action not possible"
+        return (self.perm[a]+1)/(n+1)
+
+    def pull_V(self, A):
+        """
+        A (torch.Tensor) : Vectorized version of pull
+        """
+        n = self.n
+        #assert A>= 0 and A <= n-1
+        m = A.size(0)
+        return (self.perm[A] + 1)/(n+1) 

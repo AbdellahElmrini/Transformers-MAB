@@ -10,9 +10,10 @@ import time
 
 from layers import Block
 from config import LightConfig, TransformerConfig, TrainConfig
-from multiarmedbandits import MAB_normal, MAB_normal2, MAB_Bernoulli, MAB_normal_random_order
+from multiarmedbandits import MAB_normal_V0, MAB_normal_V1, MAB_normal, MAB_Bernoulli_V0, MAB_Bernoulli
 from model import UCBTransformerModel
 from dataset import UCB_dataset
+from utils import plot_regret
 
 def train(model, train_loader, train_config : TrainConfig):
     model.train()
@@ -43,13 +44,14 @@ def train(model, train_loader, train_config : TrainConfig):
 
 
 if __name__ == "__main__":
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
     print(device)
 
     # Building the datasets
     vocab_size = 5
-    mab1 = MAB_Bernoulli(5)
-    train_data = UCB_dataset(mab1, 10000, 25)
+    mab1 = MAB_Bernoulli_random(5)
+    train_data = UCB_dataset(mab1, 10, 20)
     #test_data = UCB_dataset(mab1, 1000, 10)
 
     batch_size = 32
@@ -57,7 +59,7 @@ if __name__ == "__main__":
     #test_loader = DataLoader(test_data, batch_size = batch_size)
 
     
-    max_len = 30
+    max_len = 26
     config = LightConfig(vocab_size+1, max_len)
     model = UCBTransformerModel(config, mab1).to(device)
 
@@ -68,11 +70,12 @@ if __name__ == "__main__":
 
     print("Comparing the model with a UCB strategy in inference time")
 
-    ucb_data = UCB_dataset(mab1, 1000, 25)
+    ucb_data = UCB_dataset(mab1, 1000, 20)
     gen_actions, gen_rewards = model.generate(ucb_data.actions[:,[0]].to(device),
                                                 ucb_data.rewards[:,[0]].to(device), 30 )
     print("Mean total regret of a UCB strategy : ", mab1.best_reward_avg - ucb_data.rewards.mean())
     print("Mean total regret of transformer strategy : ", mab1.best_reward_avg - gen_rewards.mean())
+    plot_regret(ucb_data.actions, ucb_data.rewards[[0]],mab1.best_reward_avg )
 
 
 
